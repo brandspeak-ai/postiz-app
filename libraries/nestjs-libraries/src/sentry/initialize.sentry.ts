@@ -1,13 +1,15 @@
 import * as Sentry from '@sentry/nestjs';
-import { nodeProfilingIntegration } from '@sentry/profiling-node';
 import { capitalize } from 'lodash';
 
-export const initializeSentry = (appName: string, allowLogs = false) => {
+export const initializeSentry = async (appName: string, allowLogs = false) => {
   if (!process.env.NEXT_PUBLIC_SENTRY_DSN) {
     return null;
   }
 
   try {
+    // Dynamically import profiling to avoid loading native module when Sentry is disabled
+    const { nodeProfilingIntegration } = await import('@sentry/profiling-node');
+    
     Sentry.init({
       initialScope: {
         tags: {
