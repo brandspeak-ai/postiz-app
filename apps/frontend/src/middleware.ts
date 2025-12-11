@@ -104,6 +104,34 @@ export async function middleware(request: NextRequest) {
     }
     return topResponse;
   }
+
+  // Handle switchOrg query parameter - allows external systems (like BrandSpeak Hub)
+  // to specify which organization context to use when redirecting to Postiz
+  const switchOrg = nextUrl.searchParams.get('switchOrg');
+  if (switchOrg && authCookie) {
+    // Remove switchOrg from URL to prevent it from persisting
+    const cleanUrl = new URL(nextUrl.href);
+    cleanUrl.searchParams.delete('switchOrg');
+    const targetPath = cleanUrl.pathname === '/'
+      ? (process.env.IS_GENERAL ? '/launches' : '/analytics')
+      : cleanUrl.pathname;
+
+    const redirect = NextResponse.redirect(new URL(targetPath + cleanUrl.search, cleanUrl.href));
+    redirect.cookies.set('showorg', switchOrg, {
+      ...(!process.env.NOT_SECURED
+        ? {
+            path: '/',
+            secure: true,
+            httpOnly: true,
+            sameSite: false,
+            domain: getCookieUrlFromDomain(process.env.FRONTEND_URL!),
+          }
+        : {}),
+      expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365), // 1 year
+    });
+    return redirect;
+  }
+
   try {
     if (org) {
       const { id } = await (
