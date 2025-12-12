@@ -74,16 +74,24 @@ export class PublicIntegrationsController {
 
     const buffer = Buffer.from(response.data);
 
+    // Extract filename from URL path (strip query params)
+    const urlPath = body?.url?.split?.('?')?.[0] || '';
+    const urlFilename = urlPath.split('/').pop() || '';
+    // Fall back to a generated name with extension from mimetype if URL doesn't have a filename
+    const mimetype = lookup(urlPath) || 'image/jpeg';
+    const fallbackExt = mimetype.split('/')[1] || 'jpg';
+    const originalname = urlFilename || `upload.${fallbackExt}`;
+
     const getFile = await this.storage.uploadFile({
       buffer,
-      mimetype: lookup(body?.url?.split?.('?')?.[0]) || 'image/jpeg',
+      mimetype,
       size: buffer.length,
       path: '',
       fieldname: '',
       destination: '',
       stream: new Readable(),
-      filename: '',
-      originalname: '',
+      filename: originalname,
+      originalname: originalname,
       encoding: '',
     });
 
