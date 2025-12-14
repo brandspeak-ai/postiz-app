@@ -64,6 +64,8 @@ export async function middleware(request: NextRequest) {
 
   const org = nextUrl.searchParams.get('org');
   const url = new URL(nextUrl).search;
+  const switchOrg = nextUrl.searchParams.get('switchOrg');
+
   if (nextUrl.href.indexOf('/auth') === -1 && !authCookie) {
     const providers = ['google', 'settings'];
     const findIndex = providers.find((p) => nextUrl.href.indexOf(p) > -1);
@@ -76,14 +78,63 @@ export async function middleware(request: NextRequest) {
             : 'github'
           : findIndex
         ).toUpperCase()}`;
-    return NextResponse.redirect(
+
+    const redirect = NextResponse.redirect(
       new URL(`/auth${url}${additional}`, nextUrl.href)
     );
+
+    // Preserve switchOrg through login redirect - will be applied after auth
+    if (switchOrg) {
+      redirect.cookies.set('pendingSwitchOrg', switchOrg, {
+        ...(!process.env.NOT_SECURED
+          ? {
+              path: '/',
+              secure: true,
+              httpOnly: true,
+              sameSite: false,
+              domain: getCookieUrlFromDomain(process.env.FRONTEND_URL!),
+            }
+          : {}),
+        expires: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
+      });
+    }
+
+    return redirect;
   }
 
   // If the url is /auth and the cookie exists, redirect to /
+  // Also check for pendingSwitchOrg from pre-login redirect and apply it
   if (nextUrl.href.indexOf('/auth') > -1 && authCookie) {
-    return NextResponse.redirect(new URL(`/${url}`, nextUrl.href));
+    const pendingSwitchOrg = request.cookies.get('pendingSwitchOrg')?.value;
+    const targetUrl = pendingSwitchOrg
+      ? (process.env.IS_GENERAL ? '/launches' : '/analytics')
+      : `/${url}`;
+
+    const redirect = NextResponse.redirect(new URL(targetUrl, nextUrl.href));
+
+    if (pendingSwitchOrg) {
+      // Apply the pending org switch
+      redirect.cookies.set('showorg', pendingSwitchOrg, {
+        ...(!process.env.NOT_SECURED
+          ? {
+              path: '/',
+              secure: true,
+              httpOnly: true,
+              sameSite: false,
+              domain: getCookieUrlFromDomain(process.env.FRONTEND_URL!),
+            }
+          : {}),
+        expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365), // 1 year
+      });
+      // Clear the pending cookie
+      redirect.cookies.set('pendingSwitchOrg', '', {
+        path: '/',
+        maxAge: -1,
+        domain: getCookieUrlFromDomain(process.env.FRONTEND_URL!),
+      });
+    }
+
+    return redirect;
   }
   if (nextUrl.href.indexOf('/auth') > -1 && !authCookie) {
     if (org) {
@@ -107,7 +158,7 @@ export async function middleware(request: NextRequest) {
 
   // Handle switchOrg query parameter - allows external systems (like BrandSpeak Hub)
   // to specify which organization context to use when redirecting to Postiz
-  const switchOrg = nextUrl.searchParams.get('switchOrg');
+  // Note: switchOrg is already declared above for pre-login preservation
   if (switchOrg && authCookie) {
     // Remove switchOrg from URL to prevent it from persisting
     const cleanUrl = new URL(nextUrl.href);
