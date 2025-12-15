@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   ValidationPipe,
 } from '@nestjs/common';
 import { PostsRepository } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.repository';
@@ -48,6 +49,7 @@ type PostWithConditionals = Post & {
 
 @Injectable()
 export class PostsService {
+  private readonly logger = new Logger(PostsService.name);
   private storage = UploadFactory.createStorage();
   constructor(
     private _postRepository: PostsRepository,
@@ -424,13 +426,28 @@ export class PostsService {
       return {};
     }
 
-    if (dayjs(integration?.tokenExpiration).isBefore(dayjs()) || forceRefresh) {
+    const tokenExpired = dayjs(integration?.tokenExpiration).isBefore(dayjs());
+    this.logger.log(
+      `[POST_SOCIAL] Integration: ${integration.id} (${integration.providerIdentifier}/${integration.name}) ` +
+      `tokenExpiration: ${integration.tokenExpiration}, expired: ${tokenExpired}, forceRefresh: ${forceRefresh}`
+    );
+
+    if (tokenExpired || forceRefresh) {
+      this.logger.log(
+        `[POST_SOCIAL] Token expired or force refresh - triggering refresh for: ${integration.id}`
+      );
       const data = await this._refreshIntegrationService.refresh(integration);
 
       if (!data) {
+        this.logger.error(
+          `[POST_SOCIAL] Token refresh FAILED for: ${integration.id} - cannot proceed with post`
+        );
         return undefined;
       }
 
+      this.logger.log(
+        `[POST_SOCIAL] Token refresh SUCCESS for: ${integration.id} - proceeding with post`
+      );
       integration.token = data.accessToken;
 
       if (getIntegration.refreshWait) {

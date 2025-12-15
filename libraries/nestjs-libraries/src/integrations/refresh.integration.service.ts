@@ -1,4 +1,4 @@
-import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { Integration } from '@prisma/client';
 import { IntegrationManager } from '@gitroom/nestjs-libraries/integrations/integration.manager';
 import { IntegrationService } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.service';
@@ -9,12 +9,20 @@ import {
 
 @Injectable()
 export class RefreshIntegrationService {
+  private readonly logger = new Logger(RefreshIntegrationService.name);
+
   constructor(
     private _integrationManager: IntegrationManager,
     @Inject(forwardRef(() => IntegrationService))
     private _integrationService: IntegrationService
   ) {}
   async refresh(integration: Integration): Promise<false | AuthTokenDetails> {
+    this.logger.log(
+      `[TOKEN_REFRESH] Starting refresh for integration: ${integration.id} ` +
+      `(${integration.providerIdentifier}/${integration.name}) ` +
+      `tokenExpiration: ${integration.tokenExpiration}`
+    );
+
     const socialProvider = this._integrationManager.getSocialIntegration(
       integration.providerIdentifier
     );
@@ -22,8 +30,17 @@ export class RefreshIntegrationService {
     const refresh = await this.refreshProcess(integration, socialProvider);
 
     if (!refresh) {
+      this.logger.error(
+        `[TOKEN_REFRESH] FAILED for integration: ${integration.id} ` +
+        `(${integration.providerIdentifier}/${integration.name})`
+      );
       return false as const;
     }
+
+    this.logger.log(
+      `[TOKEN_REFRESH] SUCCESS for integration: ${integration.id} ` +
+      `(${integration.providerIdentifier}/${integration.name}) - updating token`
+    );
 
     await this._integrationService.createOrUpdateIntegration(
       undefined,
@@ -48,9 +65,28 @@ export class RefreshIntegrationService {
   ): Promise<AuthTokenDetails | false> {
     const refresh: false | AuthTokenDetails = await socialProvider
       .refreshToken(integration.refreshToken)
-      .catch((err) => false);
+      .catch((err) => {
+        this.logger.error(
+          `[TOKEN_REFRESH] Error refreshing token for integration: ${integration.id} ` +
+          `(${integration.providerIdentifier}/${integration.name}) - ` +
+          `Error: ${err?.message || err}`,
+          err?.stack
+        );
+        // Log additional details for OAuth errors
+        if (err?.response?.data) {
+          this.logger.error(
+            `[TOKEN_REFRESH] OAuth error response: ${JSON.stringify(err.response.data)}`
+          );
+        }
+        return false;
+      });
 
     if (!refresh) {
+      this.logger.warn(
+        `[TOKEN_REFRESH] Marking integration as needing refresh: ${integration.id} ` +
+        `(${integration.providerIdentifier}/${integration.name})`
+      );
+
       await this._integrationService.refreshNeeded(
         integration.organizationId,
         integration.id
