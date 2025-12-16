@@ -34,6 +34,8 @@ import { AutopostController } from '@gitroom/backend/api/routes/autopost.control
 import { SetsController } from '@gitroom/backend/api/routes/sets.controller';
 import { ThirdPartyController } from '@gitroom/backend/api/routes/third-party.controller';
 import { MonitorController } from '@gitroom/backend/api/routes/monitor.controller';
+import { AdminController } from '@gitroom/backend/api/routes/admin.controller';
+import { HubAdminMiddleware } from '@gitroom/backend/services/auth/hub.admin.middleware';
 
 const authenticatedController = [
   UsersController,
@@ -62,6 +64,7 @@ const authenticatedController = [
     AuthController,
     PublicController,
     MonitorController,
+    AdminController,
     ...authenticatedController,
   ],
   providers: [
@@ -70,6 +73,7 @@ const authenticatedController = [
     OpenaiService,
     ExtractContentService,
     AuthMiddleware,
+    HubAdminMiddleware,
     PoliciesGuard,
     PermissionsService,
     CodesService,
@@ -85,5 +89,6 @@ const authenticatedController = [
 export class ApiModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(AuthMiddleware).forRoutes(...authenticatedController);
+    consumer.apply(HubAdminMiddleware).forRoutes(AdminController);
   }
 }

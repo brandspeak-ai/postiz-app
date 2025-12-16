@@ -1,5 +1,5 @@
 import { PrismaRepository } from '@gitroom/nestjs-libraries/database/prisma/prisma.service';
-import { Role, SubscriptionTier } from '@prisma/client';
+import { Provider, Role, SubscriptionTier } from '@prisma/client';
 import { Injectable } from '@nestjs/common';
 import { AuthService } from '@gitroom/helpers/auth/auth.service';
 import { CreateOrgUserDto } from '@gitroom/nestjs-libraries/dtos/auth/create.org.user.dto';
@@ -324,6 +324,91 @@ export class OrganizationRepository {
       },
       data: {
         disabled: disable,
+      },
+    });
+  }
+
+  // Hub Integration Methods
+
+  /**
+   * Lookup organization by Hub client ID
+   */
+  getOrgByHubClientId(hubClientId: string) {
+    return this._organization.model.organization.findUnique({
+      where: {
+        hubClientId,
+      },
+      include: {
+        users: {
+          select: {
+            id: true,
+            userId: true,
+            role: true,
+            disabled: true,
+          },
+        },
+        subscription: {
+          select: {
+            subscriptionTier: true,
+            totalChannels: true,
+            isLifetime: true,
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Create organization for Hub provisioning (idempotent)
+   * Used by Hub Admin API to provision organizations
+   */
+  async createOrgForHub(
+    name: string,
+    hubClientId: string,
+    adminEmail: string,
+    timezone: number = 0
+  ) {
+    return this._organization.model.organization.create({
+      data: {
+        name,
+        hubClientId,
+        apiKey: AuthService.fixedEncryption(makeId(20)),
+        allowTrial: false,
+        isTrailing: false,
+        users: {
+          create: {
+            role: Role.SUPERADMIN,
+            user: {
+              create: {
+                email: adminEmail,
+                password: '',
+                providerName: Provider.GENERIC,
+                providerId: `hub_${hubClientId}`,
+                timezone,
+                activated: true,
+              },
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        hubClientId: true,
+        name: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  /**
+   * Add existing user to Hub organization with specified role
+   */
+  addUserToHubOrg(orgId: string, userId: string, role: Role) {
+    return this._userOrg.model.userOrganization.create({
+      data: {
+        organizationId: orgId,
+        userId,
+        role,
       },
     });
   }

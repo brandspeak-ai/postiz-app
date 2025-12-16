@@ -84,7 +84,9 @@ export class OauthProvider implements ProvidersInterface {
     return access_token;
   }
 
-  async getUser(access_token: string): Promise<{ email: string; id: string }> {
+  async getUser(
+    access_token: string
+  ): Promise<{ email: string; id: string; hubClientId?: string; hubRole?: string }> {
     const response = await fetch(`${this.userInfoUrl}`, {
       headers: {
         Authorization: `Bearer ${access_token}`,
@@ -97,7 +99,12 @@ export class OauthProvider implements ProvidersInterface {
       throw new Error(`User info request failed: ${error}`);
     }
 
-    const { email, sub: id } = await response.json();
-    return { email, id };
+    const userInfo = await response.json();
+    return {
+      email: userInfo.email,
+      id: userInfo.sub,
+      hubClientId: userInfo.client_id,
+      hubRole: userInfo.role,
+    };
   }
 }

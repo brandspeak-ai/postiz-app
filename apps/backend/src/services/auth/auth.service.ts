@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { Provider, User } from '@prisma/client';
+import { Injectable, Logger } from '@nestjs/common';
+import { Provider, Role, User } from '@prisma/client';
 import { CreateOrgUserDto } from '@gitroom/nestjs-libraries/dtos/auth/create.org.user.dto';
 import { LoginUserDto } from '@gitroom/nestjs-libraries/dtos/auth/login.user.dto';
 import { UsersService } from '@gitroom/nestjs-libraries/database/prisma/users/users.service';
@@ -12,8 +12,21 @@ import { ForgotReturnPasswordDto } from '@gitroom/nestjs-libraries/dtos/auth/for
 import { EmailService } from '@gitroom/nestjs-libraries/services/email.service';
 import { NewsletterService } from '@gitroom/nestjs-libraries/newsletter/newsletter.service';
 
+// Hub role → Postiz role mapping
+const HUB_ROLE_MAP: Record<string, Role> = {
+  admin: Role.ADMIN,
+  manager: Role.ADMIN,
+  editor: Role.USER,
+  viewer: Role.USER,
+};
+
+// Check if Hub OAuth mode is enabled
+const isHubOAuthEnabled = () => process.env.HUB_OAUTH_ENABLED === 'true';
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private _userService: UsersService,
     private _organizationService: OrganizationService,
@@ -238,11 +251,100 @@ export class AuthService {
       user.id,
       provider as Provider
     );
+
+    // Handle Hub organization context (only when Hub OAuth mode is enabled)
     if (checkExists) {
+      // Existing user - check if we need to add them to Hub org
+      if (isHubOAuthEnabled() && user.hubClientId) {
+        this.logger.log({
+          message: 'Hub OAuth: Resolving org for existing user',
+          userId: checkExists.id,
+          hubClientId: user.hubClientId,
+          hubRole: user.hubRole,
+        });
+
+        const hubOrg = await this._organizationService.getOrgByHubClientId(
+          user.hubClientId
+        );
+        if (hubOrg) {
+          this.logger.log({
+            message: 'Hub OAuth: Org resolved by hubClientId',
+            userId: checkExists.id,
+            hubClientId: user.hubClientId,
+            orgId: hubOrg.id,
+            orgName: hubOrg.name,
+          });
+
+          // Check if user is already in this org
+          const userInOrg = hubOrg.users.find(
+            (u) => u.userId === checkExists.id
+          );
+          if (!userInOrg) {
+            // Add user to Hub org with mapped role
+            const role = this.mapHubRole(user.hubRole);
+            await this._organizationService.addUserToHubOrg(
+              hubOrg.id,
+              checkExists.id,
+              role
+            );
+
+            this.logger.log({
+              message: 'Hub OAuth: User added to org with role mapping',
+              userId: checkExists.id,
+              orgId: hubOrg.id,
+              hubRole: user.hubRole,
+              mappedRole: role,
+            });
+          }
+          // Return JWT with Hub org context for switching
+          return { jwt: await this.jwt(checkExists), switchToOrg: hubOrg.id };
+        }
+      }
       return { jwt: await this.jwt(checkExists) };
     }
 
+    // New user - include Hub context in token if available
+    if (isHubOAuthEnabled() && user.hubClientId) {
+      this.logger.log({
+        message: 'Hub OAuth: Resolving org for new user',
+        userEmail: user.email,
+        hubClientId: user.hubClientId,
+        hubRole: user.hubRole,
+      });
+
+      const hubOrg = await this._organizationService.getOrgByHubClientId(
+        user.hubClientId
+      );
+      if (hubOrg) {
+        const mappedRole = this.mapHubRole(user.hubRole);
+
+        this.logger.log({
+          message: 'Hub OAuth: Org resolved for new user registration',
+          userEmail: user.email,
+          hubClientId: user.hubClientId,
+          orgId: hubOrg.id,
+          hubRole: user.hubRole,
+          mappedRole: mappedRole,
+        });
+
+        // Hub org exists, return token with org context
+        return {
+          token,
+          hubOrgId: hubOrg.id,
+          hubRole: mappedRole,
+        };
+      }
+    }
+
     return { token };
+  }
+
+  /**
+   * Map Hub role to Postiz role
+   */
+  private mapHubRole(hubRole?: string): Role {
+    if (!hubRole) return Role.USER;
+    return HUB_ROLE_MAP[hubRole.toLowerCase()] || Role.USER;
   }
 
   private async jwt(user: User) {
