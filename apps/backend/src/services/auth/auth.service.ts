@@ -157,6 +157,10 @@ export class AuthService {
       provider
     );
     if (user) {
+      // Existing user - check if we need to add them to Hub org
+      if (isHubOAuthEnabled() && body.hubOrgId) {
+        await this.ensureUserInHubOrg(user.id, body.hubOrgId, body.hubRole);
+      }
       return user;
     }
 
@@ -164,6 +168,32 @@ export class AuthService {
       throw new Error('Registration is disabled');
     }
 
+    // If Hub org context is provided, add user to existing Hub org instead of creating new org
+    if (isHubOAuthEnabled() && body.hubOrgId) {
+      this.logger.log({
+        message: 'Hub OAuth: Creating user and adding to existing Hub org',
+        hubOrgId: body.hubOrgId,
+        hubRole: body.hubRole,
+        email: providerUser.email,
+      });
+
+      const newUser = await this._organizationService.createUserForHubOrg(
+        {
+          email: providerUser.email,
+          provider,
+          providerId: providerUser.id,
+        },
+        body.hubOrgId,
+        this.mapHubRole(body.hubRole),
+        ip,
+        userAgent
+      );
+
+      await NewsletterService.register(providerUser.email);
+      return newUser;
+    }
+
+    // Standard flow - create new org and user
     const create = await this._organizationService.createOrgAndUser(
       {
         company: body.company,
@@ -179,6 +209,38 @@ export class AuthService {
     await NewsletterService.register(providerUser.email);
 
     return create.users[0].user;
+  }
+
+  /**
+   * Ensure user is in Hub org with correct role
+   */
+  private async ensureUserInHubOrg(userId: string, hubOrgId: string, hubRole?: string) {
+    const hubOrg = await this._organizationService.getOrgById(hubOrgId);
+    if (!hubOrg) {
+      this.logger.warn({
+        message: 'Hub OAuth: Hub org not found',
+        hubOrgId,
+        userId,
+      });
+      return;
+    }
+
+    // Check if user is already in this org
+    const userOrgs = await this._organizationService.getOrgsByUserId(userId);
+    const alreadyInOrg = userOrgs.some(org => org.id === hubOrgId);
+
+    if (!alreadyInOrg) {
+      const role = this.mapHubRole(hubRole);
+      await this._organizationService.addUserToHubOrg(hubOrgId, userId, role);
+
+      this.logger.log({
+        message: 'Hub OAuth: Added existing user to Hub org',
+        userId,
+        hubOrgId,
+        hubRole,
+        mappedRole: role,
+      });
+    }
   }
 
   async forgot(email: string) {

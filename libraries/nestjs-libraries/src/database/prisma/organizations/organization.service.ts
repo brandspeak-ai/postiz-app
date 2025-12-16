@@ -135,4 +135,28 @@ export class OrganizationService {
   addUserToHubOrg(orgId: string, userId: string, role: Role) {
     return this._organizationRepository.addUserToHubOrg(orgId, userId, role);
   }
+
+  /**
+   * Create a new user and add them to an existing Hub org
+   * Used when a new user authenticates via Hub OAuth with a valid org context
+   */
+  createUserForHubOrg(
+    userData: {
+      email: string;
+      provider: string;
+      providerId: string;
+    },
+    hubOrgId: string,
+    role: Role,
+    ip: string,
+    userAgent: string
+  ) {
+    return this._organizationRepository.createUserForHubOrg(
+      userData,
+      hubOrgId,
+      role,
+      ip,
+      userAgent
+    );
+  }
 }

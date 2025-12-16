@@ -240,10 +240,16 @@ export class AuthController {
     @Param('provider') provider: string,
     @Res({ passthrough: false }) response: Response
   ) {
-    const { jwt, token } = await this._authService.checkExists(provider, code);
+    const { jwt, token, hubOrgId, hubRole, switchToOrg } = await this._authService.checkExists(provider, code);
 
     if (token) {
-      return response.json({ token });
+      // New user - return token with Hub context if available
+      return response.json({ token, hubOrgId, hubRole });
+    }
+
+    // Existing user - if switchToOrg is set, include it for frontend to switch context
+    if (switchToOrg) {
+      response.header('x-switch-org', switchToOrg);
     }
 
     response.cookie('auth', jwt, {

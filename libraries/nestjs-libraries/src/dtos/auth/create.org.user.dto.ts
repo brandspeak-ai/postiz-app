@@ -1,6 +1,7 @@
 import {
   IsDefined,
   IsEmail,
+  IsOptional,
   IsString,
   MaxLength,
   MinLength,
@@ -35,4 +36,13 @@ export class CreateOrgUserDto {
   @MinLength(3)
   @MaxLength(128)
   company: string;
+
+  // Hub integration fields - for adding user to existing Hub org
+  @IsOptional()
+  @IsString()
+  hubOrgId?: string;
+
+  @IsOptional()
+  @IsString()
+  hubRole?: string;
 }

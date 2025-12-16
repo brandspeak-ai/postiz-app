@@ -412,4 +412,45 @@ export class OrganizationRepository {
       },
     });
   }
+
+  /**
+   * Create a new user and add them to an existing Hub org
+   * Used when a new user authenticates via Hub OAuth with a valid org context
+   */
+  async createUserForHubOrg(
+    userData: {
+      email: string;
+      provider: string;
+      providerId: string;
+    },
+    hubOrgId: string,
+    role: Role,
+    ip: string,
+    userAgent: string
+  ) {
+    // Create user and add to existing org in a transaction
+    const user = await this._user.model.user.create({
+      data: {
+        email: userData.email,
+        password: '',
+        providerName: userData.provider as Provider,
+        providerId: userData.providerId,
+        timezone: 0,
+        activated: true,
+        ip,
+        agent: userAgent,
+      },
+    });
+
+    // Add user to the Hub org with specified role
+    await this._userOrg.model.userOrganization.create({
+      data: {
+        organizationId: hubOrgId,
+        userId: user.id,
+        role,
+      },
+    });
+
+    return user;
+  }
 }
