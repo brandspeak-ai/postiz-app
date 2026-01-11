@@ -62,6 +62,51 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  // Handle forceAuth parameter - forces re-authentication by clearing session
+  // Used by external systems (like BrandSpeak Hub) to ensure correct user context
+  // Flow: clear auth cookie → redirect to login → OAuth re-authenticates → apply switchOrg
+  const forceAuth = nextUrl.searchParams.get('forceAuth');
+  const hubClientId = nextUrl.searchParams.get('hubClientId');
+  if (forceAuth === 'true' && authCookie) {
+    // Clear the auth cookie
+    const cleanUrl = new URL(nextUrl.href);
+    cleanUrl.searchParams.delete('forceAuth');
+
+    // Redirect to self without forceAuth - middleware will then redirect to login
+    const response = NextResponse.redirect(cleanUrl);
+    response.cookies.set('auth', '', {
+      path: '/',
+      ...(!process.env.NOT_SECURED
+        ? {
+            secure: true,
+            httpOnly: true,
+            sameSite: false,
+          }
+        : {}),
+      maxAge: -1,
+      domain: getCookieUrlFromDomain(process.env.FRONTEND_URL!),
+    });
+
+    // Store hubClientId in cookie BEFORE clearing session
+    // This will be used by OAuth provider to fetch userinfo for correct client
+    if (hubClientId) {
+      response.cookies.set('hubClientId', hubClientId, {
+        path: '/',
+        ...(!process.env.NOT_SECURED
+          ? {
+              secure: true,
+              httpOnly: true,
+              sameSite: false,
+              domain: getCookieUrlFromDomain(process.env.FRONTEND_URL!),
+            }
+          : {}),
+        expires: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
+      });
+    }
+
+    return response;
+  }
+
   const org = nextUrl.searchParams.get('org');
   const url = new URL(nextUrl).search;
   const switchOrg = nextUrl.searchParams.get('switchOrg');
@@ -86,6 +131,22 @@ export async function middleware(request: NextRequest) {
     // Preserve switchOrg through login redirect - will be applied after auth
     if (switchOrg) {
       redirect.cookies.set('pendingSwitchOrg', switchOrg, {
+        ...(!process.env.NOT_SECURED
+          ? {
+              path: '/',
+              secure: true,
+              httpOnly: true,
+              sameSite: false,
+              domain: getCookieUrlFromDomain(process.env.FRONTEND_URL!),
+            }
+          : {}),
+        expires: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
+      });
+    }
+
+    // Preserve hubClientId through login redirect - used by OAuth to fetch correct userinfo
+    if (hubClientId) {
+      redirect.cookies.set('hubClientId', hubClientId, {
         ...(!process.env.NOT_SECURED
           ? {
               path: '/',

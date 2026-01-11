@@ -300,12 +300,14 @@ export class AuthService {
     return providerInstance.generateLink(query);
   }
 
-  async checkExists(provider: string, code: string) {
+  async checkExists(provider: string, code: string, hubClientId?: string) {
     const providerInstance = ProvidersFactory.loadProvider(
       provider as Provider
     );
     const token = await providerInstance.getToken(code);
-    const user = await providerInstance.getUser(token);
+    // Pass hubClientId to getUser so it can be included in userinfo request
+    // This tells Hub which client context to use when user has multiple clients
+    const user = await providerInstance.getUser(token, hubClientId);
     if (!user) {
       throw new Error('Invalid user');
     }

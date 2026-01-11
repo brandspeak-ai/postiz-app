@@ -8,5 +8,5 @@ export interface HubUserInfo {
 export interface ProvidersInterface {
   generateLink(query?: any): Promise<string> | string;
   getToken(code: string): Promise<string>;
-  getUser(providerToken: string): Promise<HubUserInfo> | false;
+  getUser(providerToken: string, hubClientId?: string): Promise<HubUserInfo> | false;
 }

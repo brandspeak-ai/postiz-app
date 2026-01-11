@@ -85,9 +85,18 @@ export class OauthProvider implements ProvidersInterface {
   }
 
   async getUser(
-    access_token: string
+    access_token: string,
+    hubClientId?: string
   ): Promise<{ email: string; id: string; hubClientId?: string; hubRole?: string }> {
-    const response = await fetch(`${this.userInfoUrl}`, {
+    // Build userinfo URL with optional client_id to specify which Hub client context
+    // This is needed when user has multiple clients in Hub
+    let url = this.userInfoUrl;
+    if (hubClientId) {
+      const separator = url.includes('?') ? '&' : '?';
+      url = `${url}${separator}client_id=${encodeURIComponent(hubClientId)}`;
+    }
+
+    const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${access_token}`,
         Accept: 'application/json',

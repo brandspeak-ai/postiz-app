@@ -236,11 +236,15 @@ export class AuthController {
 
   @Post('/oauth/:provider/exists')
   async oauthExists(
+    @Req() req: Request,
     @Body('code') code: string,
     @Param('provider') provider: string,
     @Res({ passthrough: false }) response: Response
   ) {
-    const { jwt, token, hubOrgId, hubRole, switchToOrg } = await this._authService.checkExists(provider, code);
+    // Read hubClientId from cookie - set by middleware when user arrives from Hub
+    // This tells Hub which client context to use when fetching userinfo
+    const hubClientId = req?.cookies?.hubClientId;
+    const { jwt, token, hubOrgId, hubRole, switchToOrg } = await this._authService.checkExists(provider, code, hubClientId);
 
     if (token) {
       // New user - return token with Hub context if available
@@ -263,6 +267,15 @@ export class AuthController {
         : {}),
       expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
     });
+
+    // Clear hubClientId cookie after successful auth - no longer needed
+    if (hubClientId) {
+      response.cookie('hubClientId', '', {
+        domain: getCookieUrlFromDomain(process.env.FRONTEND_URL!),
+        path: '/',
+        maxAge: 0,
+      });
+    }
 
     if (process.env.NOT_SECURED) {
       response.header('auth', jwt);
