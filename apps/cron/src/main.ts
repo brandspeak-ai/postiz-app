@@ -3,10 +3,14 @@ initializeSentry('cron');
 
 import { NestFactory } from '@nestjs/core';
 import { CronModule } from './cron.module';
+import { StructuredLogger } from '@gitroom/nestjs-libraries/logging/structured.logger';
 
 async function start() {
-  // some comment again
-  await NestFactory.createApplicationContext(CronModule);
+  process.env.SERVICE_NAME = 'cron';
+
+  const logger = new StructuredLogger();
+
+  await NestFactory.createApplicationContext(CronModule, { logger });
 }
 
 start();

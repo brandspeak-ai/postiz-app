@@ -53,7 +53,7 @@ export const LayoutSettings = ({ children }: { children: ReactNode }) => {
   const fetch = useFetch();
   const t = useT();
 
-  const { isGeneral } = useVariables();
+  const { isGeneral, logoUrl, appName } = useVariables();
   const { backendUrl, billingEnabled } = useVariables();
   const searchParams = useSearchParams();
   const load = useCallback(async (path: string) => {
@@ -96,16 +96,18 @@ export const LayoutSettings = ({ children }: { children: ReactNode }) => {
               >
                 <div className="min-w-[55px]">
                   <Image
-                    src={isGeneral ? '/postiz.svg' : '/logo.svg'}
+                    src={logoUrl || (isGeneral ? '/postiz.svg' : '/logo.svg')}
                     width={55}
                     height={53}
                     alt="Logo"
                   />
                 </div>
                 <div
-                  className={clsx(!isGeneral ? 'mt-[12px]' : 'min-w-[80px]')}
+                  className={clsx(!isGeneral && !logoUrl ? 'mt-[12px]' : 'min-w-[80px]')}
                 >
-                  {isGeneral ? (
+                  {logoUrl ? (
+                    <span className="text-xl font-semibold">{appName}</span>
+                  ) : isGeneral ? (
                     <svg
                       width="80"
                       height="75"
@@ -161,7 +163,7 @@ export const LayoutSettings = ({ children }: { children: ReactNode }) => {
                       <h1 className="text-3xl [@media(max-width:1024px)]:text-xl">
                         {t(
                           'join_10000_entrepreneurs_who_use_postiz',
-                          'Join 10,000+ Entrepreneurs Who Use Postiz'
+                          `Join 10,000+ Entrepreneurs Who Use ${appName}`
                         )}
                         <br />
                         {t(

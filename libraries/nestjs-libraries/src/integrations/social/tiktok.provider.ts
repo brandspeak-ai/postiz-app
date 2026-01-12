@@ -445,7 +445,6 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     integration: Integration
   ): Promise<PostResponse[]> {
     const [firstPost] = postDetails;
-    console.log('hello');
     const isPhoto = (firstPost?.media?.[0]?.path?.indexOf('mp4') || -1) === -1;
     const {
       data: { publish_id },
@@ -476,7 +475,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
                       : {}),
                     ...(isPhoto ? { description: firstPost.message } : {}),
                     privacy_level:
-                      firstPost.settings.privacy_level || 'PUBLIC_TO_EVERYONE',
+                      firstPost.settings.privacy_level || 'SELF_ONLY',
                     disable_duet: !firstPost.settings.duet || false,
                     disable_comment: !firstPost.settings.comment || false,
                     disable_stitch: !firstPost.settings.stitch || false,

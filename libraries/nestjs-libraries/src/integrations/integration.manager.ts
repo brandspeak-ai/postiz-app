@@ -30,7 +30,7 @@ import { WordpressProvider } from '@gitroom/nestjs-libraries/integrations/social
 import { ListmonkProvider } from '@gitroom/nestjs-libraries/integrations/social/listmonk.provider';
 import { GmbProvider } from '@gitroom/nestjs-libraries/integrations/social/gmb.provider';
 
-export const socialIntegrationList: SocialProvider[] = [
+const allSocialIntegrations: SocialProvider[] = [
   new XProvider(),
   new LinkedinProvider(),
   new LinkedinPageProvider(),
@@ -60,6 +60,30 @@ export const socialIntegrationList: SocialProvider[] = [
   new ListmonkProvider(),
   // new MastodonCustomProvider(),
 ];
+
+/**
+ * Filter integrations based on environment variables:
+ * - DISABLED_INTEGRATIONS: comma-separated list of identifiers to hide (e.g., "discord,slack,telegram")
+ * - ENABLED_INTEGRATIONS: if set, only show these integrations (takes precedence over DISABLED)
+ */
+function filterIntegrations(integrations: SocialProvider[]): SocialProvider[] {
+  const enabledList = process.env.ENABLED_INTEGRATIONS?.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const disabledList = process.env.DISABLED_INTEGRATIONS?.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+
+  if (enabledList?.length) {
+    // If ENABLED_INTEGRATIONS is set, only show those
+    return integrations.filter(p => enabledList.includes(p.identifier.toLowerCase()));
+  }
+
+  if (disabledList?.length) {
+    // If DISABLED_INTEGRATIONS is set, hide those
+    return integrations.filter(p => !disabledList.includes(p.identifier.toLowerCase()));
+  }
+
+  return integrations;
+}
+
+export const socialIntegrationList: SocialProvider[] = filterIntegrations(allSocialIntegrations);
 
 @Injectable()
 export class IntegrationManager {

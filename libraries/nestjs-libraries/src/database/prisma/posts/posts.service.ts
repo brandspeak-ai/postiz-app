@@ -264,6 +264,10 @@ export class PostsService {
 
       return getImageList;
     } catch (err: any) {
+      this.logger.error(
+        `[updateMedia] Error processing media for post ${id}: ${err?.message || err}`,
+        err?.stack
+      );
       return imagesList;
     }
   }
@@ -458,11 +462,23 @@ export class PostsService {
     const newPosts = await this.updateTags(integration.organizationId, posts);
 
     try {
-      const publishedPosts = await getIntegration.post(
-        integration.internalId,
-        integration.token,
-        await Promise.all(
-          (newPosts || []).map(async (p) => ({
+      const postDetails = await Promise.all(
+        (newPosts || []).map(async (p) => {
+          const rawImage = p.image || '[]';
+          const parsedImage = JSON.parse(rawImage);
+          this.logger.log(
+            `[POST_SOCIAL] Post ${p.id} for ${integration.providerIdentifier}: ` +
+            `rawImage=${rawImage}, parsedImage=${JSON.stringify(parsedImage)}`
+          );
+          const media = await this.updateMedia(
+            p.id,
+            parsedImage,
+            getIntegration?.convertToJPEG || false
+          );
+          this.logger.log(
+            `[POST_SOCIAL] Post ${p.id} media after updateMedia: ${JSON.stringify(media)}`
+          );
+          return {
             id: p.id,
             message: stripHtmlValidation(
               getIntegration.editor,
@@ -473,13 +489,15 @@ export class PostsService {
               getIntegration.mentionFormat
             ),
             settings: JSON.parse(p.settings || '{}'),
-            media: await this.updateMedia(
-              p.id,
-              JSON.parse(p.image || '[]'),
-              getIntegration?.convertToJPEG || false
-            ),
-          }))
-        ),
+            media,
+          };
+        })
+      );
+
+      const publishedPosts = await getIntegration.post(
+        integration.internalId,
+        integration.token,
+        postDetails,
         integration
       );
 

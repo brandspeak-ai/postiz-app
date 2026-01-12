@@ -46,6 +46,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           disableImageCompression={!!process.env.DISABLE_IMAGE_COMPRESSION}
           disableXAnalytics={!!process.env.DISABLE_X_ANALYTICS}
           sentryDsn={process.env.NEXT_PUBLIC_SENTRY_DSN!}
+          appName={process.env.NEXT_PUBLIC_APP_NAME || 'Postiz'}
+          logoUrl={process.env.NEXT_PUBLIC_LOGO_URL || ''}
           transloadit={
             process.env.TRANSLOADIT_AUTH && process.env.TRANSLOADIT_TEMPLATE
               ? [

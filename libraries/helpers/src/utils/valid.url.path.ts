@@ -31,15 +31,24 @@ export class ValidUrlPath implements ValidatorConstraintInterface {
       return true;
     }
 
-    return (
-      (text || 'invalid url').indexOf(process.env.RESTRICT_UPLOAD_DOMAINS) > -1
-    );
+    const url = text || '';
+    const allowedDomains = process.env.RESTRICT_UPLOAD_DOMAINS.split(',').map(d => d.trim());
+
+    return allowedDomains.some(domain => {
+      // Support wildcard patterns like *.brandspeak.ai
+      if (domain.startsWith('*.')) {
+        const baseDomain = domain.slice(2); // Remove '*.'
+        // Match the base domain or any subdomain
+        return url.includes('.' + baseDomain) || url.includes('//' + baseDomain);
+      }
+      return url.includes(domain);
+    });
   }
 
   defaultMessage(args: ValidationArguments) {
     // here you can provide default error message if validation failed
     return (
-      'URL must contain the domain: ' + process.env.RESTRICT_UPLOAD_DOMAINS
+      'URL must contain an allowed domain: ' + process.env.RESTRICT_UPLOAD_DOMAINS
     );
   }
 }

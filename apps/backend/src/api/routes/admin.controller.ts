@@ -11,7 +11,7 @@ import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/o
 import { CreateHubOrganizationDto } from '@gitroom/nestjs-libraries/dtos/admin/create.hub.organization.dto';
 
 @ApiTags('Admin')
-@Controller('/api/admin')
+@Controller('/admin')
 export class AdminController {
   private readonly logger = new Logger(AdminController.name);
 
